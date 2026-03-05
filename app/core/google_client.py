@@ -161,16 +161,19 @@ class GoogleAIClient:
         tokens = {}
         
         # 1. 提取 mstk (核心鉴权)
+        # data-mstk 属性出现在 folif 响应中，需优先匹配
         mstk_patterns = [
+            r'data-mstk="([^"]+)"',        # folif 响应 HTML 属性（已验证）
             r'"mstk":"([^"]+)"',
             r"'mstk':'([^']+)'",
             r'mstk=([A-Za-z0-9_\-]+)',
-            r'(AUtEx[A-Za-z0-9_\-\.]+)', # 匹配 AUtEx 开头的完整字符串
+            r'(AUtEx[A-Za-z0-9_\-\.]+)', # 兜底
         ]
         for pattern in mstk_patterns:
             match = re.search(pattern, html)
             if match:
                 tokens["mstk"] = match.group(1)
+                logger.debug(f"mstk 已提取，匹配模式: {pattern[:25]}")
                 break
         
         if not tokens.get("mstk"):
@@ -198,21 +201,19 @@ class GoogleAIClient:
         """发送 AI 对话请求（非流式）"""
         logger.info(f"发送查询: {query[:50]}...")
         
-        if not self.mstk or not self.ei:
+        if not self.ei:
             await self.initialize_session()
         
         params = {
             "ei": self.ei or self._generate_ei(),
             "yv": "3",
-            "aep": "22",      # 恢复 aep=22
+            "aep": "22",
             "source": "hp",
             "udm": "50",
-            "cs": "1",
-            "csuir": "1",
-            "csui": "3",
+            "cs": "0",
+            "csuir": "0",
             "q": query,
             "ved": self._generate_ved(),
-            "opi": "89978449",
         }
         
         if self.sca_esv: params["sca_esv"] = self.sca_esv
@@ -220,10 +221,7 @@ class GoogleAIClient:
         if self.elrc: params["elrc"] = self.elrc
         if self.mstk: params["mstk"] = self.mstk
         
-        xsrf_part = ""
-        if self.xsrf_token:
-            xsrf_part = f",_xsrf:{self.xsrf_token}:{int(time.time() * 1000)}"
-        params["async"] = f"_fmt:adl,opi:89978449,cs:1{xsrf_part}"
+        params["async"] = f"_fmt:adl"
         
         headers = dict(self.FOLIF_HEADERS)
         headers["Cookie"] = self._build_cookie_header()
@@ -259,7 +257,7 @@ class GoogleAIClient:
         """流式 AI 对话"""
         logger.info(f"流式查询: {query[:50]}...")
         
-        if not self.mstk or not self.ei:
+        if not self.ei:
             await self.initialize_session()
         
         params = {
@@ -268,12 +266,10 @@ class GoogleAIClient:
             "aep": "22",
             "source": "hp",
             "udm": "50",
-            "cs": "1",
-            "csuir": "1",
-            "csui": "3",
+            "cs": "0",
+            "csuir": "0",
             "q": query,
             "ved": self._generate_ved(),
-            "opi": "89978449",
         }
         
         if self.sca_esv: params["sca_esv"] = self.sca_esv
@@ -281,10 +277,7 @@ class GoogleAIClient:
         if self.elrc: params["elrc"] = self.elrc
         if self.mstk: params["mstk"] = self.mstk
         
-        xsrf_part = ""
-        if self.xsrf_token:
-            xsrf_part = f",_xsrf:{self.xsrf_token}:{int(time.time() * 1000)}"
-        params["async"] = f"_fmt:adl,opi:89978449,cs:1{xsrf_part}"
+        params["async"] = "_fmt:adl"
         
         headers = dict(self.FOLIF_HEADERS)
         headers["Cookie"] = self._build_cookie_header()
@@ -323,36 +316,50 @@ class GoogleAIClient:
             yield f"[ERROR] {str(e)}"
 
     def _parse_ai_response(self, html: str) -> dict:
-        """解析 HTML 响应提取 AI 文本"""
+        """解析 folif 返回的 HTML 响应，提取 AI 文本并更新 mstk"""
         try:
             soup = BeautifulSoup(html, "lxml")
             text_parts = []
-            
-            # Google 常见的 AI 回复选择器
-            selectors = [
-                'div[data-ai-response]', 'div.aiAMsb', 'div[jsname="r4nke"]',
-                'div[jsname="Nll0ne"]', 'div.IZ6rdc', 'span.hgKElc', 'div.VwiC3b'
-            ]
-            
-            for selector in selectors:
-                elements = soup.select(selector)
-                for elem in elements:
-                    text = elem.get_text(separator="\n", strip=True)
-                    if text and len(text) > 5:
-                        text_parts.append(text)
-            
-            if not text_parts:
-                for tag in soup.find_all(['script', 'style', 'noscript']): tag.decompose()
-                all_text = soup.get_text(separator="\n", strip=True)
-                lines = [l.strip() for l in all_text.split("\n") if len(l.strip()) > 3]
-                if lines: text_parts = ["\n".join(lines)]
-            
+
+            # 顺手从每次 folif 响应里更新 mstk（存在 data-mstk 属性中）
+            mstk_tag = soup.find(attrs={"data-mstk": True})
+            if mstk_tag:
+                new_mstk = mstk_tag.get("data-mstk", "")
+                if new_mstk:
+                    self.mstk = new_mstk
+                    logger.info("从 folif 响应中成功更新 mstk")
+
+            # 移除干扰标签
+            for tag in soup.find_all(['script', 'style', 'noscript']):
+                tag.decompose()
+
+            # 提取段落文本（Y3BBE 是当前 Google AI Mode 段落容器，已验证）
+            for container in soup.find_all(class_='Y3BBE'):
+                for noise in container.find_all(class_=['txxDge', 'rBl3me', 'vKEkVd']):
+                    noise.decompose()
+                text = container.get_text(separator='', strip=True)
+                if text and len(text) > 1:
+                    text_parts.append(text)
+
+            # 提取列表内容（U6u95 是 AI 回复列表，已验证）
+            for ul in soup.find_all('ul', class_='U6u95'):
+                for li in ul.find_all('li', recursive=False):
+                    for noise in li.find_all(class_=['txxDge', 'rBl3me', 'vKEkVd']):
+                        noise.decompose()
+                    text = li.get_text(separator='', strip=True)
+                    if text and len(text) > 1:
+                        text_parts.append(f"• {text}")
+
             if text_parts:
-                final_text = "\n\n".join(list(dict.fromkeys(text_parts))) # 去重合并
+                final_text = "\n\n".join(text_parts)
                 return {"success": True, "text": self._clean_response_text(final_text), "error": ""}
             else:
+                # 调试：打印响应片段，帮助排查 Google 返回了什么
+                preview = html[:800].replace("\n", " ").strip()
+                logger.warning(f"_parse_ai_response: 未找到 AI 内容，响应预览: {preview}")
                 return {"success": False, "text": "", "error": "无法解析AI响应内容"}
         except Exception as e:
+            logger.error(f"_parse_ai_response 异常: {e}")
             return {"success": False, "text": "", "error": str(e)}
 
     def _clean_response_text(self, text: str) -> str:
@@ -361,10 +368,13 @@ class GoogleAIClient:
         return text.strip()
 
     def _extract_streaming_text(self, buffer: str) -> tuple:
-        match = re.search(r'(<div[^>]*>.*?</div>)', buffer, re.DOTALL)
+        """从流式缓冲区中提取已完整到达的 Y3BBE 段落"""
+        match = re.search(r'(<div[^>]*class="[^"]*Y3BBE[^"]*"[^>]*>.*?</div>)', buffer, re.DOTALL)
         if match:
             fragment = match.group(1)
             soup = BeautifulSoup(fragment, "lxml")
+            for noise in soup.find_all(class_=['txxDge', 'rBl3me', 'vKEkVd', 'script', 'style']):
+                noise.decompose()
             text = soup.get_text(separator="", strip=True)
             if text and len(text) > 1:
                 return text, buffer[match.end():]
