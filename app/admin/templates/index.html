@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google AI Proxy - 管理控制台</title>
+    <style>
+        :root { --primary: #667eea; --primary-dark: #5a6fd6; --danger: #e74c3c; --success: #27ae60; --warning: #f39c12; --bg: #f5f7fb; --card: #fff; --text: #333; --text-light: #888; --border: #e8ecf1; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); }
+        /* Sidebar */
+        .sidebar { position:fixed; left:0; top:0; bottom:0; width:220px; background:linear-gradient(180deg,#2c3e50,#34495e); padding:20px 0; z-index:100; }
+        .sidebar .logo { color:#fff; font-size:18px; font-weight:700; padding:0 20px 24px; border-bottom:1px solid rgba(255,255,255,0.1); display:flex; align-items:center; gap:10px; }
+        .sidebar .logo span { font-size:28px; }
+        .sidebar nav a { display:flex; align-items:center; gap:10px; padding:14px 20px; color:rgba(255,255,255,0.7); text-decoration:none; font-size:14px; transition:all 0.2s; border-left:3px solid transparent; }
+        .sidebar nav a:hover, .sidebar nav a.active { background:rgba(255,255,255,0.08); color:#fff; border-left-color:var(--primary); }
+        .sidebar nav a .icon { font-size:18px; width:24px; text-align:center; }
+        .sidebar .logout { position:absolute; bottom:20px; left:0; right:0; }
+        /* Main */
+        .main { margin-left:220px; padding:24px 32px; min-height:100vh; }
+        .page-title { font-size:22px; font-weight:700; margin-bottom:24px; color:#2c3e50; }
+        /* Cards */
+        .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-bottom:28px; }
+        .stat-card { background:var(--card); border-radius:12px; padding:20px; box-shadow:0 2px 12px rgba(0,0,0,0.06); }
+        .stat-card .label { font-size:13px; color:var(--text-light); margin-bottom:6px; }
+        .stat-card .value { font-size:28px; font-weight:700; color:var(--primary); }
+        .stat-card .sub { font-size:12px; color:var(--text-light); margin-top:4px; }
+        /* Table */
+        .card { background:var(--card); border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,0.06); margin-bottom:24px; overflow:hidden; }
+        .card-header { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+        .card-header h3 { font-size:16px; font-weight:600; }
+        table { width:100%; border-collapse:collapse; font-size:13px; }
+        th { background:#f8f9fc; padding:10px 14px; text-align:left; font-weight:600; color:#666; border-bottom:1px solid var(--border); white-space:nowrap; }
+        td { padding:10px 14px; border-bottom:1px solid var(--border); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        tr:hover td { background:#f8f9fc; }
+        /* Badges */
+        .badge { display:inline-block; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600; }
+        .badge-success { background:#e8f5e9; color:#27ae60; }
+        .badge-error { background:#fdecea; color:#e74c3c; }
+        .badge-warning { background:#fff8e1; color:#f39c12; }
+        .badge-info { background:#e3f2fd; color:#2196f3; }
+        .badge-idle { background:#f3e5f5; color:#9c27b0; }
+        /* Buttons */
+        .btn { padding:8px 16px; border:none; border-radius:8px; font-size:13px; font-weight:500; cursor:pointer; transition:all 0.2s; }
+        .btn-primary { background:var(--primary); color:#fff; }
+        .btn-primary:hover { background:var(--primary-dark); }
+        .btn-danger { background:var(--danger); color:#fff; }
+        .btn-sm { padding:5px 12px; font-size:12px; }
+        .btn-outline { background:transparent; border:1px solid var(--border); color:var(--text); }
+        .btn-outline:hover { border-color:var(--primary); color:var(--primary); }
+        /* Modal */
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:200; align-items:center; justify-content:center; }
+        .modal-overlay.show { display:flex; }
+        .modal { background:#fff; border-radius:16px; padding:32px; width:640px; max-width:90vw; max-height:85vh; overflow-y:auto; }
+        .modal h3 { margin-bottom:20px; font-size:18px; }
+        .form-group { margin-bottom:16px; }
+        .form-group label { display:block; margin-bottom:5px; font-size:13px; font-weight:500; color:#555; }
+        .form-group input, .form-group textarea, .form-group select { width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:8px; font-size:14px; outline:none; transition:border-color 0.3s; }
+        .form-group input:focus, .form-group textarea:focus { border-color:var(--primary); }
+        .form-group textarea { min-height:120px; font-family:monospace; resize:vertical; }
+        .form-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
+        /* Pagination */
+        .pagination { display:flex; gap:6px; justify-content:center; padding:16px; }
+        .pagination button { padding:6px 14px; border:1px solid var(--border); border-radius:6px; background:#fff; cursor:pointer; font-size:13px; }
+        .pagination button.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+        /* Sections */
+        .section { display:none; }
+        .section.active { display:block; }
+        /* Toast */
+        .toast { position:fixed; top:20px; right:20px; padding:14px 24px; background:#333; color:#fff; border-radius:10px; font-size:14px; z-index:300; display:none; box-shadow:0 4px 20px rgba(0,0,0,0.3); }
+        .toast.show { display:block; animation:slideIn 0.3s; }
+        @keyframes slideIn { from{transform:translateX(100px);opacity:0} to{transform:translateX(0);opacity:1} }
+        /* Parsing Result */
+        .parse-result { margin-top:10px; padding:12px; background:#f8f9fc; border-radius:8px; font-size:13px; display:none; border:1px solid var(--border); }
+        .parse-result.success { border-color:var(--success); background:#f0fdf4; }
+        .parse-result.error { border-color:var(--danger); background:#fef2f2; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="logo"><span>🤖</span> AI Proxy</div>
+        <nav>
+            <a href="#" class="active" onclick="showSection('dashboard',this)"><span class="icon">📊</span> 仪表盘</a>
+            <a href="#" onclick="showSection('accounts',this)"><span class="icon">👤</span> 账户管理</a>
+            <a href="#" onclick="showSection('models',this)"><span class="icon">🧩</span> 模型管理</a>
+            <a href="#" onclick="showSection('apikeys',this)"><span class="icon">🔑</span> API Keys</a>
+            <a href="#" onclick="showSection('logs',this)"><span class="icon">📋</span> 请求日志</a>
+            <a href="#" onclick="showSection('settings',this)"><span class="icon">⚙️</span> 系统设置</a>
+        </nav>
+        <div class="logout">
+            <a href="#" onclick="doLogout()"><span class="icon">🚪</span> 退出登录</a>
+        </div>
+    </div>
+
+    <div class="main">
+        <!-- 仪表盘 -->
+        <div id="sec-dashboard" class="section active">
+            <h2 class="page-title">仪表盘</h2>
+            <div class="stats-grid" id="statsGrid"></div>
+        </div>
+
+        <!-- 账户管理 -->
+        <div id="sec-accounts" class="section">
+            <h2 class="page-title">账户管理</h2>
+            <div class="card">
+                <div class="card-header">
+                    <h3>Google 账户列表</h3>
+                    <button class="btn btn-primary" onclick="showAddAccountModal()">➕ 添加账户</button>
+                </div>
+                <table><thead><tr>
+                    <th>ID</th><th>邮箱</th><th>状态</th><th>总请求</th><th>成功率</th><th>Cookie轮换</th><th>mstk</th><th>最后使用</th><th>操作</th>
+                </tr></thead><tbody id="accountsBody"></tbody></table>
+            </div>
+        </div>
+        
+        <!-- 模型管理 -->
+        <div id="sec-models" class="section">
+            <h2 class="page-title">模型管理</h2>
+            <div class="card" style="padding:20px 20px 0;">
+                <p style="font-size:13px;color:#666;line-height:1.6;margin-bottom:16px;">
+                    定义第三方客户端可拉取的模型列表。你可以添加多个虚拟模型（例如 <code>gemini-2.5-pro</code>），它们在底层都会通过 Google AI Mode 接口请求。<br>
+                    <strong>注意：</strong>客户端请求哪个模型，都会使用同样的对话接口，区别在于你可以在"API Keys"中限制每个 Key 能使用哪些模型。
+                </p>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <h3>可用模型列表</h3>
+                    <button class="btn btn-primary" onclick="showAddModelModal()">➕ 添加模型</button>
+                </div>
+                <table><thead><tr>
+                    <th>模型 ID</th><th>显示名称</th><th>描述</th><th>排序</th><th>状态</th><th>添加时间</th><th>操作</th>
+                </tr></thead><tbody id="modelsBody"></tbody></table>
+            </div>
+        </div>
+
+        <!-- API Keys -->
+        <div id="sec-apikeys" class="section">
+            <h2 class="page-title">API Key 管理</h2>
+            <div class="card">
+                <div class="card-header">
+                    <h3>API Keys</h3>
+                    <button class="btn btn-primary" onclick="showAddKeyModal()">➕ 创建 Key</button>
+                </div>
+                <table><thead><tr>
+                    <th>Key</th><th>备注</th><th>状态</th><th>已用/额度</th><th>可用模型</th><th>有效期</th><th>最后使用</th><th>操作</th>
+                </tr></thead><tbody id="apikeysBody"></tbody></table>
+            </div>
+            <div class="card" style="padding:20px;">
+                <h3 style="margin-bottom:12px;">接入说明</h3>
+                <p style="font-size:13px;color:#666;line-height:1.8;">
+                    API 基础地址：<code style="background:#f0f0f0;padding:2px 8px;border-radius:4px;">http://your-server:{{ settings.PORT }}</code><br>
+                    兼容 OpenAI API 格式，可直接在支持自定义 API 的客户端中使用：<br>
+                    • API Base URL: <code style="background:#f0f0f0;padding:2px 8px;border-radius:4px;">http://your-server:{{ settings.PORT }}/v1</code><br>
+                    • 模型名称: 客户端可自动拉取，或手动填入你在模型管理中定义的模型ID<br>
+                    • 支持流式输出 (stream: true)
+                </p>
+            </div>
+        </div>
+
+        <!-- 请求日志 -->
+        <div id="sec-logs" class="section">
+            <h2 class="page-title">请求日志</h2>
+            <div class="card">
+                <div class="card-header">
+                    <h3>最近请求</h3>
+                    <div>
+                        <select id="logFilter" onchange="loadLogs(1)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+                            <option value="">全部状态</option>
+                            <option value="success">成功</option>
+                            <option value="error">失败</option>
+                        </select>
+                    </div>
+                </div>
+                <table><thead><tr>
+                    <th>时间</th><th>账户</th><th>模型</th><th>查询</th><th>响应</th><th>Token</th><th>耗时</th><th>状态</th><th>客户端</th>
+                </tr></thead><tbody id="logsBody"></tbody></table>
+                <div class="pagination" id="logsPagination"></div>
+            </div>
+        </div>
+
+        <!-- 系统设置 -->
+        <div id="sec-settings" class="section">
+            <h2 class="page-title">系统设置</h2>
+            <div class="card" style="padding:24px;" id="settingsCard"></div>
+        </div>
+    </div>
+
+    <!-- 添加账户弹窗 -->
+    <div class="modal-overlay" id="addAccountModal">
+        <div class="modal">
+            <h3>添加 Google 账户</h3>
+            <div class="form-group"><label>Google 邮箱 *</label><input type="email" id="accEmail" placeholder="example@gmail.com"></div>
+            <div class="form-group"><label>显示名称</label><input type="text" id="accName" placeholder="可选"></div>
+            
+            <div class="form-group" style="position: relative;">
+                <label>粘贴 Cookie *</label>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                    <span style="font-size:11px;color:#999;">支持: 插件导出JSON数组 / 对象 / 原始字符串 / cURL格式</span>
+                    <button class="btn btn-sm btn-outline" onclick="parseCookies('add')">一键解析填充</button>
+                </div>
+                <textarea id="accRawCookies" placeholder="请在此处粘贴你复制的任意格式的 Cookie 内容..."></textarea>
+                
+                <div id="addParseResult" class="parse-result"></div>
+                <input type="hidden" id="accParsedCookiesJSON">
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn-outline" onclick="closeModal('addAccountModal')">取消</button>
+                <button class="btn btn-primary" onclick="addAccount()" id="btnAddAcc" disabled>确认添加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑 Cookie 弹窗 -->
+    <div class="modal-overlay" id="editCookieModal">
+        <div class="modal">
+            <h3>更新账户 Cookie</h3>
+            <p id="editCookieEmail" style="margin-bottom:16px;font-weight:600;"></p>
+            <input type="hidden" id="editAccountId">
+            
+            <div class="form-group">
+                <label>当前 Cookie 数据 (JSON格式)</label>
+                <textarea id="editCurrentCookies" style="height:80px;background:#f9f9f9;" readonly></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>粘贴新的 Cookie *</label>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                    <span style="font-size:11px;color:#999;">支持任意格式，一键解析</span>
+                    <button class="btn btn-sm btn-outline" onclick="parseCookies('edit')">解析验证</button>
+                </div>
+                <textarea id="editRawCookies" placeholder="在此处粘贴新的 Cookie..."></textarea>
+                
+                <div id="editParseResult" class="parse-result"></div>
+                <input type="hidden" id="editParsedCookiesJSON">
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn-outline" onclick="closeModal('editCookieModal')">取消</button>
+                <button class="btn btn-primary" onclick="updateCookies()" id="btnUpdateCookie" disabled>保存更新</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建/编辑模型弹窗 -->
+    <div class="modal-overlay" id="modelModal">
+        <div class="modal">
+            <h3 id="modelModalTitle">添加模型</h3>
+            <input type="hidden" id="editModelId">
+            <div class="form-group">
+                <label>模型 ID *</label>
+                <input type="text" id="modelId" placeholder="例如：gemini-2.5-pro">
+                <p style="font-size:11px;color:#999;margin-top:4px;">客户端将使用此 ID 请求 API</p>
+            </div>
+            <div class="form-group">
+                <label>显示名称</label>
+                <input type="text" id="modelName" placeholder="例如：Gemini 2.5 Pro">
+            </div>
+            <div class="form-group">
+                <label>模型描述</label>
+                <input type="text" id="modelDesc" placeholder="可选，模型的用途说明">
+            </div>
+            <div class="form-group">
+                <label>排序权重</label>
+                <input type="number" id="modelSort" value="0" placeholder="数字越大在客户端列表中越靠前">
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-outline" onclick="closeModal('modelModal')">取消</button>
+                <button class="btn btn-primary" onclick="saveModel()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建 Key 弹窗 -->
+    <div class="modal-overlay" id="addKeyModal">
+        <div class="modal">
+            <h3>创建 API Key</h3>
+            <div class="form-group"><label>备注名称</label><input type="text" id="keyName" placeholder="例如：ChatBox客户端"></div>
+            
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="form-group">
+                    <label>有效期至</label>
+                    <input type="date" id="keyExpiry" placeholder="不填表示永久有效">
+                </div>
+                <div class="form-group">
+                    <label>最大请求次数 (额度)</label>
+                    <input type="number" id="keyMaxReqs" placeholder="不填表示不限制">
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn-outline" onclick="closeModal('addKeyModal')">取消</button>
+                <button class="btn btn-primary" onclick="createApiKey()">创建</button>
+            </div>
+            <div id="newKeyResult" style="display:none;margin-top:16px;padding:14px;background:#f0f0f0;border-radius:8px;word-break:break-all;">
+                <p style="font-size:12px;color:#666;margin-bottom:6px;">请复制保存，关闭后无法再次查看完整 Key：</p>
+                <div style="display:flex; gap: 10px; align-items:center;">
+                    <code id="newKeyValue" style="font-size:14px;font-weight:600;color:var(--primary);flex:1;"></code>
+                    <button class="btn btn-sm btn-outline" onclick="copyNewKey()" id="btnCopyNewKey">复制</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 绑定模型弹窗 -->
+    <div class="modal-overlay" id="bindModelModal">
+        <div class="modal">
+            <h3>设置可用模型</h3>
+            <p style="margin-bottom:12px;font-size:13px;color:#666;">
+                勾选该 API Key 允许调用的模型。<br>
+                <strong>如果什么都不勾选，则默认允许访问所有模型。</strong>
+            </p>
+            <input type="hidden" id="bindKeyId">
+            
+            <div id="modelChecklist" style="max-height:300px;overflow-y:auto;border:1px solid #eee;border-radius:8px;padding:12px;margin-bottom:16px;background:#fafafa;">
+                <!-- 模型列表将在这里动态渲染 -->
+            </div>
+            
+            <div class="form-actions">
+                <button class="btn btn-outline" onclick="closeModal('bindModelModal')">取消</button>
+                <button class="btn btn-primary" onclick="saveKeyModels()">保存设置</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // ========== 工具函数 ==========
+        async function api(url, opts = {}) {
+            const resp = await fetch(url, { headers: {'Content-Type':'application/json'}, ...opts });
+            if (resp.status === 401 && !url.includes('login')) { window.location.href = '/admin/login'; return null; }
+            return resp;
+        }
+
+        function toast(msg, dur=3000) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), dur);
+        }
+
+        /**
+         * 复制文本到剪贴板（兼容 HTTP 环境）
+         */
+        async function copyText(text) {
+            // 方案1: 使用现代 Clipboard API
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                try {
+                    await navigator.clipboard.writeText(text);
+                    toast('已复制到剪贴板');
+                    return true;
+                } catch (err) {
+                    console.error('Clipboard API 复制失败:', err);
+                }
+            }
+
+            // 方案2: 后备方案 - 使用 textarea
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            
+            // 确保其不可见但存在于 DOM 中
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            textArea.style.top = "0";
+            document.body.appendChild(textArea);
+            
+            textArea.focus();
+            textArea.select();
+
+            try {
+                const successful = document.execCommand('copy');
+            if (successful) {
+                toast('已复制到剪贴板 (后备方案)');
+            } else {
+                toast('复制失败，请手动复制');
+                console.error("execCommand('copy') 返回 False");
+            }
+        } catch (err) {
+            toast('复制失败，请手动复制');
+            console.error("execCommand('copy') 异常:", err);
+        }
+
+            document.body.removeChild(textArea);
+        }
+
+        function showSection(name, el) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.getElementById('sec-' + name).classList.add('active');
+            document.querySelectorAll('.sidebar nav a').forEach(a => a.classList.remove('active'));
+            if (el) el.classList.add('active');
+            if (name === 'dashboard') loadStats();
+            if (name === 'accounts') loadAccounts();
+            if (name === 'models') loadModels();
+            if (name === 'logs') loadLogs(1);
+            if (name === 'apikeys') loadApiKeys();
+            if (name === 'settings') loadSettings();
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('show'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+        
+        function showAddAccountModal() { 
+            document.getElementById('accEmail').value=''; 
+            document.getElementById('accName').value=''; 
+            document.getElementById('accRawCookies').value=''; 
+            document.getElementById('addParseResult').style.display='none';
+            document.getElementById('accParsedCookiesJSON').value='';
+            document.getElementById('btnAddAcc').disabled=true;
+            showModal('addAccountModal'); 
+        }
+        
+        function showAddKeyModal() { 
+            document.getElementById('keyName').value=''; 
+            document.getElementById('keyExpiry').value=''; 
+            document.getElementById('keyMaxReqs').value=''; 
+            document.getElementById('newKeyResult').style.display='none'; 
+            showModal('addKeyModal'); 
+        }
+
+        function fmtTime(iso, onlyDate=false) { 
+            if (!iso) return '-'; 
+            const d = new Date(iso); 
+            if (onlyDate) return d.toLocaleDateString('zh-CN');
+            return d.toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}); 
+        }
+
+        // ========== 解析 Cookie ==========
+        async function parseCookies(type) {
+            const rawId = type === 'add' ? 'accRawCookies' : 'editRawCookies';
+            const resId = type === 'add' ? 'addParseResult' : 'editParseResult';
+            const jsonId = type === 'add' ? 'accParsedCookiesJSON' : 'editParsedCookiesJSON';
+            const btnId = type === 'add' ? 'btnAddAcc' : 'btnUpdateCookie';
+            
+            const raw = document.getElementById(rawId).value.trim();
+            const resEl = document.getElementById(resId);
+            const btnEl = document.getElementById(btnId);
+            
+            if (!raw) {
+                resEl.className = 'parse-result error';
+                resEl.innerHTML = '❌ 请先粘贴 Cookie 数据';
+                resEl.style.display = 'block';
+                return;
+            }
+
+            resEl.className = 'parse-result';
+            resEl.innerHTML = '⏳ 正在解析...';
+            resEl.style.display = 'block';
+
+            const resp = await api('/admin/api/parse-cookies', { method: 'POST', body: JSON.stringify({raw}) });
+            if (!resp) return;
+            const d = await resp.json();
+
+            if (d.success) {
+                document.getElementById(jsonId).value = d.cookies_json;
+                
+                let html = `<strong>✅ 解析成功</strong> (共 ${d.total_cookies} 个)<br>`;
+                html += `<span style="color:#666">格式类型: ${d.format}</span><br>`;
+                
+                if (d.has_auth) {
+                    html += `<br><span style="color:var(--success)">🔒 已检测到身份鉴权 Cookie (SID / __Secure-1PSID)</span>`;
+                    btnEl.disabled = false;
+                } else {
+                    html += `<br><span style="color:var(--danger)">⚠️ 未检测到身份鉴权 Cookie，可能处于未登录状态</span>`;
+                    btnEl.disabled = false; // 允许添加未登录cookie，但给出警告
+                }
+                
+                resEl.className = 'parse-result success';
+                resEl.innerHTML = html;
+            } else {
+                resEl.className = 'parse-result error';
+                resEl.innerHTML = '❌ ' + d.error;
+                document.getElementById(jsonId).value = '';
+                btnEl.disabled = true;
+            }
+        }
+
+        // ========== 仪表盘 ==========
+        async function loadStats() {
+            const resp = await api('/admin/api/stats');
+            if (!resp) return;
+            const d = await resp.json();
+            const a = d.accounts, r = d.requests;
+            document.getElementById('statsGrid').innerHTML = `
+                <div class="stat-card"><div class="label">总账户数</div><div class="value">${a.total}</div><div class="sub">活跃 ${a.active} / 异常 ${a.error}</div></div>
+                <div class="stat-card"><div class="label">缓存客户端</div><div class="value">${a.clients_cached}</div><div class="sub">已初始化的连接</div></div>
+                <div class="stat-card"><div class="label">总请求数</div><div class="value">${r.total}</div><div class="sub">成功 ${r.success}</div></div>
+                <div class="stat-card"><div class="label">今日请求</div><div class="value">${r.today}</div><div class="sub">平均耗时 ${r.avg_duration_ms}ms</div></div>
+                <div class="stat-card"><div class="label">轮询策略</div><div class="value" style="font-size:18px;">${d.rotation_strategy}</div><div class="sub">Cookie轮换 ${d.cookie_rotate_interval}s</div></div>
+            `;
+        }
+
+        // ========== 账户管理 ==========
+        async function loadAccounts() {
+            const resp = await api('/admin/api/accounts');
+            if (!resp) return;
+            const d = await resp.json();
+            const body = document.getElementById('accountsBody');
+            body.innerHTML = d.accounts.map(a => {
+                const rate = a.total_requests > 0 ? Math.round(a.success_requests / a.total_requests * 100) : 0;
+                const statusCls = {idle:'badge-idle',busy:'badge-info',error:'badge-error',disabled:'badge-warning'}[a.status] || 'badge-info';
+                return `<tr>
+                    <td>${a.id}</td>
+                    <td><strong>${a.email}</strong><br><span style="font-size:11px;color:#999;">${a.display_name||''}</span></td>
+                    <td><span class="badge ${statusCls}">${a.status}</span>${a.error_message?'<br><span style="font-size:11px;color:#e74c3c;">'+a.error_message.substring(0,30)+'</span>':''}</td>
+                    <td>${a.total_requests}</td>
+                    <td>${rate}%</td>
+                    <td>${a.cookie_rotate_count}次<br><span style="font-size:11px;color:#999;">${fmtTime(a.last_cookie_rotate_at)}</span></td>
+                    <td><span class="badge ${a.has_mstk?'badge-success':'badge-error'}">${a.has_mstk?'✓':'✗'}</span></td>
+                    <td style="font-size:12px;">${fmtTime(a.last_used_at)}</td>
+                    <td style="white-space:nowrap;">
+                        <button class="btn btn-sm btn-primary" onclick="showEditCookie(${a.id}, '${a.email}')">更新Cookie</button>
+                        <button class="btn btn-sm btn-outline" onclick="toggleAcc(${a.id},${!a.is_active})">${a.is_active?'禁用':'启用'}</button>
+                        <button class="btn btn-sm btn-outline" onclick="reinitAcc(${a.id})">重置</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteAcc(${a.id})">删除</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        async function addAccount() {
+            const email = document.getElementById('accEmail').value.trim();
+            const cookies_json = document.getElementById('accParsedCookiesJSON').value;
+            const name = document.getElementById('accName').value.trim();
+            
+            if (!email || !cookies_json) return toast('请填写完整信息并确保已解析Cookie');
+            
+            const resp = await api('/admin/api/accounts', { method:'POST', body: JSON.stringify({email, cookies_json, display_name:name}) });
+            if (resp && resp.ok) { closeModal('addAccountModal'); loadAccounts(); toast('账户添加成功'); }
+            else { const d = await resp.json(); toast(d.detail || '添加失败'); }
+        }
+
+        async function showEditCookie(id, email) {
+            document.getElementById('editAccountId').value = id;
+            document.getElementById('editCookieEmail').textContent = email;
+            document.getElementById('editRawCookies').value = '';
+            document.getElementById('editParseResult').style.display = 'none';
+            document.getElementById('editParsedCookiesJSON').value = '';
+            document.getElementById('btnUpdateCookie').disabled = true;
+            document.getElementById('editCurrentCookies').value = '加载中...';
+            
+            showModal('editCookieModal');
+            
+            const resp = await api(`/admin/api/accounts/${id}/cookies`);
+            if (resp && resp.ok) {
+                const d = await resp.json();
+                document.getElementById('editCurrentCookies').value = d.cookies_json;
+            }
+        }
+
+        async function updateCookies() {
+            const id = document.getElementById('editAccountId').value;
+            const cookies_json = document.getElementById('editParsedCookiesJSON').value;
+            
+            if (!cookies_json) return toast('请先解析有效的 Cookie');
+            
+            toast('正在更新并验证...');
+            const resp = await api(`/admin/api/accounts/${id}/cookies`, { method:'PUT', body: JSON.stringify({cookies_json}) });
+            
+            if (resp && resp.ok) {
+                closeModal('editCookieModal');
+                loadAccounts();
+                toast('Cookie已更新并重新初始化');
+            } else {
+                const d = await resp.json();
+                toast(d.detail || '更新失败');
+            }
+        }
+
+        async function deleteAcc(id) { if(!confirm('确认删除此账户？')) return; await api(`/admin/api/accounts/${id}`, {method:'DELETE'}); loadAccounts(); toast('已删除'); }
+        async function toggleAcc(id, active) { await api(`/admin/api/accounts/${id}/toggle`, {method:'POST', body:JSON.stringify({active})}); loadAccounts(); }
+        async function reinitAcc(id) { toast('正在重新初始化...'); const r = await api(`/admin/api/accounts/${id}/reinit`, {method:'POST'}); if(r&&r.ok) toast('初始化成功'); else toast('初始化失败'); loadAccounts(); }
+
+        // ========== 模型管理 ==========
+        let allModels = [];
+        
+        async function loadModels() {
+            const resp = await api('/admin/api/models');
+            if (!resp) return;
+            const d = await resp.json();
+            allModels = d.models;
+            document.getElementById('modelsBody').innerHTML = d.models.map(m => `<tr>
+                <td><code>${m.model_id}</code></td>
+                <td>${m.model_name||'-'}</td>
+                <td>${m.description||'-'}</td>
+                <td>${m.sort_order}</td>
+                <td><span class="badge ${m.is_active?'badge-success':'badge-error'}">${m.is_active?'启用':'禁用'}</span></td>
+                <td>${fmtTime(m.created_at)}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline" onclick="showEditModelModal(${m.id})">编辑</button>
+                    <button class="btn btn-sm btn-outline" onclick="toggleModel(${m.id},${!m.is_active})">${m.is_active?'禁用':'启用'}</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteModel(${m.id})">删除</button>
+                </td>
+            </tr>`).join('');
+        }
+        
+        function showAddModelModal() {
+            document.getElementById('modelModalTitle').textContent = '添加模型';
+            document.getElementById('editModelId').value = '';
+            document.getElementById('modelId').value = '';
+            document.getElementById('modelId').disabled = false;
+            document.getElementById('modelName').value = '';
+            document.getElementById('modelDesc').value = '';
+            document.getElementById('modelSort').value = '0';
+            showModal('modelModal');
+        }
+        
+        function showEditModelModal(id) {
+            const m = allModels.find(x => x.id === id);
+            if(!m) return;
+            document.getElementById('modelModalTitle').textContent = '编辑模型';
+            document.getElementById('editModelId').value = m.id;
+            document.getElementById('modelId').value = m.model_id;
+            document.getElementById('modelId').disabled = true;
+            document.getElementById('modelName').value = m.model_name;
+            document.getElementById('modelDesc').value = m.description;
+            document.getElementById('modelSort').value = m.sort_order;
+            showModal('modelModal');
+        }
+        
+        async function saveModel() {
+            const id = document.getElementById('editModelId').value;
+            const model_id = document.getElementById('modelId').value.trim();
+            const model_name = document.getElementById('modelName').value.trim();
+            const description = document.getElementById('modelDesc').value.trim();
+            const sort_order = parseInt(document.getElementById('modelSort').value) || 0;
+            
+            if (!model_id) return toast('模型ID不能为空');
+            
+            let resp;
+            if (id) {
+                // 更新
+                resp = await api(`/admin/api/models/${id}`, { 
+                    method:'PUT', 
+                    body: JSON.stringify({model_name, description, sort_order}) 
+                });
+            } else {
+                // 添加
+                resp = await api('/admin/api/models', { 
+                    method:'POST', 
+                    body: JSON.stringify({model_id, model_name, description, sort_order}) 
+                });
+            }
+            
+            if (resp && resp.ok) { 
+                closeModal('modelModal'); 
+                loadModels(); 
+                toast('模型已保存'); 
+            } else { 
+                const d = await resp.json(); 
+                toast(d.detail || '保存失败'); 
+            }
+        }
+        
+        async function deleteModel(id) { if(!confirm('确认删除？')) return; await api(`/admin/api/models/${id}`,{method:'DELETE'}); loadModels(); }
+        async function toggleModel(id, active) { await api(`/admin/api/models/${id}/toggle`,{method:'POST',body:JSON.stringify({active})}); loadModels(); }
+
+        // ========== 请求日志 ==========
+        async function loadLogs(page) {
+            const status = document.getElementById('logFilter').value;
+            const resp = await api(`/admin/api/logs?page=${page}&page_size=15${status?'&status='+status:''}`);
+            if (!resp) return;
+            const d = await resp.json();
+            document.getElementById('logsBody').innerHTML = d.logs.map(l => `<tr>
+                <td style="font-size:12px;">${fmtTime(l.created_at)}</td>
+                <td>${l.account_email||'-'}</td>
+                <td>${l.model}</td>
+                <td title="${l.query_text}">${l.query_text}</td>
+                <td title="${l.response_text}">${l.response_text||'-'}</td>
+                <td>${l.total_tokens}</td>
+                <td>${l.duration_ms}ms</td>
+                <td><span class="badge ${l.status==='success'?'badge-success':'badge-error'}">${l.status}</span></td>
+                <td style="font-size:12px;">${l.client_ip}</td>
+            </tr>`).join('');
+            // 分页
+            let pg = '';
+            for(let i=1;i<=d.pages;i++) pg += `<button class="${i===d.page?'active':''}" onclick="loadLogs(${i})">${i}</button>`;
+            document.getElementById('logsPagination').innerHTML = pg;
+        }
+
+        // ========== API Keys ==========
+        async function loadApiKeys() {
+            const resp = await api('/admin/api/apikeys');
+            if (!resp) return;
+            const d = await resp.json();
+            
+            const now = new Date();
+
+            document.getElementById('apikeysBody').innerHTML = d.keys.map(k => {
+                const maxReqs = k.max_requests;
+                const totalReqs = k.total_requests;
+                
+                let quotaHtml = `${totalReqs} / ${maxReqs !== null ? maxReqs : '<span style="color:#999">∞</span>'}`;
+                let quotaWarning = '';
+                if (maxReqs !== null && totalReqs >= maxReqs) {
+                    quotaWarning = ' <span title="额度已耗尽" style="cursor:help;">⚠️</span>';
+                }
+
+                let expiryHtml = fmtTime(k.expires_at, true);
+                if (k.expires_at) {
+                    const expiryDate = new Date(k.expires_at);
+                    if (expiryDate < now) {
+                        expiryHtml = `<span class="badge badge-error" title="Key 已过期">${expiryHtml}</span>`;
+                    } else {
+                        const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+                        if (daysLeft <= 7) {
+                            expiryHtml = `<span style="color:var(--warning)" title="剩余 ${daysLeft} 天">${expiryHtml}</span>`;
+                        }
+                    }
+                } else {
+                    expiryHtml = '<span style="color:#999">永久</span>';
+                }
+
+                return `<tr>
+                    <td><code>${k.key}</code></td>
+                    <td>${k.name||'-'}</td>
+                    <td><span class="badge ${k.is_active?'badge-success':'badge-error'}">${k.is_active?'启用':'禁用'}</span></td>
+                    <td style="white-space:nowrap;">${quotaHtml}${quotaWarning}</td>
+                    <td>
+                        ${k.allowed_models ? `<span class="badge badge-info" title="${k.allowed_models}">${k.allowed_models.split(',').length} 个模型</span>` : '<span class="badge badge-success">全部允许</span>'}
+                    </td>
+                    <td style="white-space:nowrap;">${expiryHtml}</td>
+                    <td>${fmtTime(k.last_used_at)}</td>
+                    <td style="white-space:nowrap;">
+                        <button class="btn btn-sm btn-outline" onclick="copyText('${k.full_key}')">复制</button>
+                        <button class="btn btn-sm btn-primary" onclick="showBindModelModal(${k.id})">模型设置</button>
+                        <button class="btn btn-sm btn-outline" onclick="toggleKey(${k.id},${!k.is_active})">${k.is_active?'禁用':'启用'}</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteKey(${k.id})">删除</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        async function createApiKey() {
+            const name = document.getElementById('keyName').value.trim();
+            const expiry = document.getElementById('keyExpiry').value;
+            const maxReqs = document.getElementById('keyMaxReqs').value;
+
+            // 处理日期，转换为 ISO 格式供后端解析
+            let expiresAt = null;
+            if (expiry) {
+                // 设置为该日期的 23:59:59
+                const date = new Date(expiry);
+                date.setHours(23, 59, 59, 999);
+                expiresAt = date.toISOString();
+            }
+
+            const body = {
+                name,
+                expires_at: expiresAt,
+                max_requests: maxReqs ? parseInt(maxReqs) : null
+            };
+
+            const resp = await api('/admin/api/apikeys', { method:'POST', body: JSON.stringify(body) });
+            if (resp && resp.ok) {
+                const d = await resp.json();
+                document.getElementById('newKeyValue').textContent = d.key;
+                document.getElementById('newKeyResult').style.display = 'block';
+                loadApiKeys();
+                toast('API Key 已创建');
+            }
+        }
+
+        function copyNewKey() {
+            const key = document.getElementById('newKeyValue').textContent;
+            if (key) {
+                copyText(key);
+            }
+        }
+        
+        async function showBindModelModal(keyId) {
+            document.getElementById('bindKeyId').value = keyId;
+            const listEl = document.getElementById('modelChecklist');
+            listEl.innerHTML = '<div style="text-align:center;padding:20px;color:#999;">加载中...</div>';
+            showModal('bindModelModal');
+            
+            // 并行请求：获取所有模型 和 获取当前Key权限
+            const [modelsResp, keyResp] = await Promise.all([
+                api('/admin/api/models'),
+                api(`/admin/api/apikeys/${keyId}/models`)
+            ]);
+            
+            if (!modelsResp || !keyResp) return;
+            const mData = await modelsResp.json();
+            const kData = await keyResp.json();
+            
+            const allowed = kData.allowed_models || [];
+            
+            if (mData.models.length === 0) {
+                listEl.innerHTML = '<div style="color:#e74c3c;">暂无模型，请先去模型管理页面添加模型</div>';
+                return;
+            }
+            
+            let html = '';
+            mData.models.forEach(m => {
+                const checked = allowed.includes(m.model_id) ? 'checked' : '';
+                html += `
+                <div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid #eee;">
+                    <input type="checkbox" id="chk_model_${m.model_id}" value="${m.model_id}" class="model-checkbox" ${checked} style="width:16px;height:16px;margin-right:10px;cursor:pointer;">
+                    <label for="chk_model_${m.model_id}" style="cursor:pointer;flex:1;">
+                        <span style="font-weight:600;">${m.model_id}</span>
+                        ${m.model_name ? `<span style="color:#666;font-size:12px;margin-left:10px;">(${m.model_name})</span>` : ''}
+                    </label>
+                </div>`;
+            });
+            listEl.innerHTML = html;
+        }
+        
+        async function saveKeyModels() {
+            const keyId = document.getElementById('bindKeyId').value;
+            const checkboxes = document.querySelectorAll('.model-checkbox:checked');
+            const model_ids = Array.from(checkboxes).map(c => c.value);
+            
+            const resp = await api(`/admin/api/apikeys/${keyId}/models`, { 
+                method: 'PUT', 
+                body: JSON.stringify({model_ids}) 
+            });
+            
+            if (resp && resp.ok) {
+                closeModal('bindModelModal');
+                loadApiKeys();
+                toast('模型权限已更新');
+            } else {
+                toast('保存失败');
+            }
+        }
+
+        async function deleteKey(id) { if(!confirm('确认删除？')) return; await api(`/admin/api/apikeys/${id}`,{method:'DELETE'}); loadApiKeys(); }
+        async function toggleKey(id, active) { await api(`/admin/api/apikeys/${id}/toggle`,{method:'POST',body:JSON.stringify({active})}); loadApiKeys(); }
+
+        // ========== 系统设置 ==========
+        async function loadSettings() {
+            const resp = await api('/admin/api/settings');
+            if (!resp) return;
+            const d = await resp.json();
+            
+            const modeMap = {
+                'auto': '自动混合模式 (优先登录账号，无账号时降级为匿名)',
+                'login': '仅登录模式 (仅使用已添加的Cookie账号)',
+                'anonymous': '纯匿名模式 (不使用任何Cookie，直接请求)'
+            };
+            
+            document.getElementById('settingsCard').innerHTML = `
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;">
+                    <div class="form-group"><label>轮询策略</label><input value="${d.rotation_strategy}" disabled></div>
+                    <div class="form-group"><label>Cookie 轮换间隔 (秒)</label><input value="${d.cookie_rotate_interval}" disabled></div>
+                    <div class="form-group"><label>请求超时 (秒)</label><input value="${d.request_timeout}" disabled></div>
+                    <div class="form-group"><label>服务端口</label><input value="${d.port}" disabled></div>
+                </div>
+                
+                <h3 style="margin:20px 0 16px;border-top:1px solid #eee;padding-top:20px;">运行模式设置</h3>
+                <div style="background:#f8f9fc;padding:20px;border-radius:12px;border:1px solid var(--border);">
+                    <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
+                        <span style="font-weight:600;width:100px;">当前模式：</span>
+                        <span class="badge badge-success" style="font-size:14px;padding:6px 16px;">${d.run_mode.toUpperCase()}</span>
+                        <span style="color:#666;font-size:13px;">${modeMap[d.run_mode] || d.run_mode}</span>
+                    </div>
+                    
+                    <div style="display:flex;gap:12px;">
+                        <button class="btn ${d.run_mode==='auto'?'btn-primary':'btn-outline'}" onclick="setRunMode('auto')">设为自动模式</button>
+                        <button class="btn ${d.run_mode==='login'?'btn-primary':'btn-outline'}" onclick="setRunMode('login')">设为仅登录模式</button>
+                        <button class="btn ${d.run_mode==='anonymous'?'btn-primary':'btn-outline'}" onclick="setRunMode('anonymous')">设为纯匿名模式</button>
+                    </div>
+                    <p style="margin-top:12px;font-size:12px;color:#888;">说明：匿名模式下无需任何配置即可对话，但可能缺少高级个性化功能。</p>
+                </div>
+                
+                <p style="margin-top:24px;font-size:12px;color:#999;text-align:center;">提示：修改其他配置请编辑服务器上的 .env 文件后重启服务</p>
+            `;
+        }
+        
+        async function setRunMode(mode) {
+            const resp = await api('/admin/api/settings/run_mode', { method:'POST', body: JSON.stringify({mode}) });
+            if (resp && resp.ok) {
+                toast('运行模式已切换为 ' + mode);
+                loadSettings();
+            }
+        }
+
+        async function doLogout() { await api('/admin/api/logout',{method:'POST'}); window.location.href='/admin/login'; }
+
+        // 初始化加载
+        loadStats();
+    </script>
+</body>
+</html>
