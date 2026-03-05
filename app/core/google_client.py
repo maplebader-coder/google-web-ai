@@ -407,4 +407,17 @@ class GoogleAIClient:
         except: return {"success": False}
 
     def get_current_tokens(self) -> dict:
-        return {"mstk": self.mstk, "stkp": self.stkp, "ei": self.ei, "cookies": len(self.cookies)}
+        return {
+            "mstk": self.mstk,
+            "stkp": self.stkp,
+            "elrc": self.elrc,
+            "ei": self.ei,
+            "sca_esv": self.sca_esv,
+            "xsrf_token": self.xsrf_token,
+            "at_token": self.at_token,
+            "cookies_count": len(self.cookies),
+        }
+
+    def get_cookies_dict(self) -> dict:
+        """获取当前 Cookie 字典"""
+        return dict(self.cookies)
